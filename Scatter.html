@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+  .bubbles {
+    stroke-width: 2px;
+    stroke: white;
+  }
+  .bubbles:hover {
+    stroke: black;
+  }
+  #selectButton{
+    margin-left: 50px;
+    margin-top: 50px;
+  }
+  .text_c {
+    fill: rgb(75, 33, 33);
+    text-shadow: 3px 2px gray;
+    font-size: 16px;
+    font-family: sans-serif;
+}
+</style>
+
+<!-- Load d3.js -->
+<script src="https://d3js.org/d3.v6.js"></script>
+
+<!-- Initialize a select button -->
+<select id="selectButton"></select>
+
+<!-- Create a div where the graph will take place -->
+<div id="my_dataviz"></div>
+<script>
+
+    // set the dimensions and margins of the graph
+    const margin = {top: 10, right: 100, bottom: 30, left: 100},
+        width = 1200 - margin.left - margin.right,
+        height = 420 - margin.top - margin.bottom;
+
+    
+    // append the svg object to the body of the page
+    const svg = d3.select("#my_dataviz")
+      .append("svg")
+        .attr("width", width + margin.left + margin.right)
+        .attr("height", height + margin.top + margin.bottom)
+        .call(responsivefy)
+      .append("g")
+        .attr("transform",`translate(${margin.left},${margin.top})`);
+
+        function responsivefy(svg) {
+             
+             // Container is the DOM element, svg is appended.
+             // Then we measure the container and find its
+             // aspect ratio.
+             const container = d3.select(svg.node().parentNode),
+                 width = parseInt(svg.style('width'), 10),
+                 height = parseInt(svg.style('height'), 10),
+                 aspect = width / height;
+                  
+             // Add viewBox attribute to set the value to initial size
+             // add preserveAspectRatio attribute to specify how to scale
+             // and call resize so that svg resizes on page load
+             svg.attr('viewBox', `0 0 ${width} ${height}`).
+             attr('preserveAspectRatio', 'xMinYMid').
+             call(resize);
+              
+             d3.select(window).on('resize.' + container.attr('id'), resize);
+   
+             function resize() {
+                 const targetWidth = parseInt(container.style('width'));
+                 svg.attr('width', targetWidth);
+                 svg.attr('height', Math.round(targetWidth / aspect));
+             }
+         }
+
+  
+        svg.append("text")
+            .attr("x", width/2)
+            .attr("y", 2)
+            .attr("text-anchor", "middle")
+            .style("font-size", "16px")
+            .text("Population Chart");
+    
+    //Read the data
+    d3.csv("population.csv").then(function(data) {
+      
+              const allGroup = new Set(data.map(d => d['year']))
+              // console.log("year",allGroup)
+
+              // add the options to the button
+              d3.select("#selectButton")
+                .selectAll('myOptions')
+                .data(allGroup)
+                .enter()
+                .append('option')
+                .text(d => d) // text showed in the menu
+                .attr("value", d => d) // corresponding value returned by the button
+
+              // Add X axis --> it is a date format
+              const x = d3.scaleLinear()
+                          .domain([-600, d3.max(data, function(d) {return d[" Density "]; })])
+                          .range([ 0, width ]);
+              svg.append("g")
+                .attr("transform", `translate(0, ${height})`)
+                .call(d3.axisBottom(x).ticks(5));
+
+              // var maxRadius = 1000
+              // Add Y axis
+              const y = d3.scaleLinear()
+              .domain([-100,100])
+
+                .range([ height, 0 ]);
+              svg.append("g")
+                .call(d3.axisLeft(y).ticks(3));
+              // Add a scale for bubble size
+              var z = d3.scaleLinear()
+                  .domain([ d3.min(data, function(d) {return d[" Population "];}), d3.max(data, function(d) {return d[" Population "];})])
+                  .range([ 1, 20]);
+                  
+                  // Add a scale for bubble color
+          const myColor = d3.scaleOrdinal()
+          .domain(["Asia", "Europe", "Americas", "Africa", "Oceania"])
+          .range(d3.schemeSet2);
+
+
+          // Add X axis label:
+          svg.append("text")
+              .attr("text-anchor", "end")
+              .attr("x", width)
+              .attr("y", height + margin.top + 20)
+              .text("Population Density");
+
+          // Y axis label:
+          svg.append("text")
+              .attr("text-anchor", "end")
+              .attr("transform", "rotate(-90)")
+              .attr("y", -margin.left+20)
+              .attr("x", -margin.top)
+              .text("Population Growth")
+
+            // -1- Create a tooltip div that is hidden by default:
+          const tooltip = d3.select("#my_dataviz")
+          .append("div")
+            .style("opacity", 0)
+            .attr("class", "tooltip")
+            .style("background-color", "black")
+            .style("border-radius", "5px")
+            .style("padding", "10px")
+            .style("color", "white")
+
+          // -2- Create 3 functions to show / update (when mouse move but stay on same circle) / hide the tooltip
+          const showTooltip = function(event, d) {
+          // console.log("tooltip data",d)
+
+
+          tooltip
+            .transition()
+            .duration(200)
+          tooltip
+
+            .style("opacity", 1)
+            .html("Country: " + d.Country)
+         
+            .style("left", (event.x)/2 + "px")
+            .style("top", (event.y)/2+30 + "px")
+          }
+         
+          const moveTooltip = function(event, d) {
+          tooltip
+            .style("left", (event.x)/2 + "px")
+            .style("top", (event.y)/2+30 + "px")
+          }
+          const hideTooltip = function(event, d) {
+          tooltip
+            .transition()
+            .duration(200)
+            .style("opacity", 0)
+          }
+            
+          // Initialize line with first group of the list
+          // const line = svg
+          //   .append('g')
+          //   .append("path")
+          //     .datum(data.filter(function(d){
+          //         return d.year=="1950"}))
+          //     .attr("d", d3.line()
+          //       .x(function(d) { return x(d[" Density"]) })
+          //       .y(function(d) { return y(+d[" Growth"]) })
+
+          //     )
+          //     .attr("stroke", "black")
+          //     // .attr("stroke", function(d){ return myColor("valueA") })
+          //     .style("stroke-width", 4)
+          //     .style("fill", "none")
+
+         
+var tooltip_filter = d3.select("body")
+    .append("div")
+    .style("position", "absolute")
+    .style("z-index", "10")
+    .style("visibility", "hidden")
+    .style("background", "#000")
+    .text("a simple tooltip");
+     
+                const dot =   svg.append('g')
+          .selectAll("dot")
+          .data(data.filter(function(d){return d.year=="1950"}))
+          .join("circle")
+            .attr("class", "bubbles")
+         
+
+            .attr("cx", d => x(d[" Density "]))
+                  .attr("cy", d => y(d[" Growth "]))
+                  .attr("r", d=> 
+                  // console.log(d[" Population "])
+                  z(d[" Population "])
+                   )
+                  .style("fill", d => myColor(d.Country))
+                  //adding
+                  // .on('mouseover', (event, d) => 
+                  // // .text(d.country)
+                  // // console.log(d.country)
+                  // );
+                  .text(function(d) {
+                    // console.log(d.Country) 
+                    return d.Country; })
+    // .on("mouseover", function(d){tooltip_filter.text(d.Country); return tooltip_filter.style("visibility", "visible");})
+    //   .on("mousemove", function(){return tooltip_filter.style("top", (d3.event.pageY-10)+"px").style("left",(d3.event.pageX+10)+"px");})
+    //   .on("mouseout", function(){return tooltip_filter.style("visibility", "hidden");});
+
+                 
+
+
+
+
+                // A function that update the chart
+                function update(selectedGroup) {
+                  
+          
+              // Create new data with the selection?
+              const dataFilter = data.filter(function(d){return d.year==selectedGroup})
+            
+
+           
+                 
+                    // Create new data with the selection?
+            var dataFilter1 = dataFilter.map(function(d){return { country : d["Country"],density: d[" Density "],population:d[" Population "], growth:d[" Growth "]} })
+                  //  console.log(dataFilter1)
+                  
+                  
+                  var groupedData =  d3.group(dataFilter1, d => d.country);
+              //    console.log(groupedData)
+                
+              // Give these new data to update line
+              // line
+              //     .datum(dataFilter)
+              //     .transition()
+              //     .duration(1000)
+              //     .attr("d", d3.line()
+              //     .x(d => x(+d[" Density "]))
+              //       .y(d => y(+d[" Growth "]))
+              //     )
+              //     .attr("stroke", "black" )
+              
+
+                  
+              dot
+              .data(dataFilter1)
+              .transition()
+              .duration(1000)
+                .attr("cx", function(d) { return x(+d.density) })
+                .attr("cy", function(d) { return y(+d.growth) })
+                .attr("r", d=>  z(+d.population) )
+                .style("fill", d => 
+                // console.log(d.country)
+                myColor(d.country)
+                )
+                .on("mouseover",function(d){
+
+                    var xPosition = parseFloat(d3.select(this).attr("x"));
+					var yPosition = parseFloat(d3.select(this).attr("y"));
+                    d3.select("#tooltip")
+                        .style("left",d.x+200+"px")
+                        .style("top",d.y+"px")
+                        .selectAll("#value")
+                            .text(d.data.country);
+                    // d3.select("#tooltip")
+                    //     .selectAll("#value2")
+                    //         .text("Year: "+d.data.year);
+                    // d3.select("#tooltip")
+                    //     .selectAll("#value3")
+                    //     .text("Flow: "+d.data.flow+" | Amount in USD: "+d.data.trade_usd+"B");
+                    // d3.select("#tooltip")
+                    //     .selectAll("#value4")
+                    //     .text("Country: "+d.data.country_or_area);
+                    d3.select("#tooltip").classed("hidden",false)
+                })
+                .on("mouseout", function(d){
+                    //Hide the tooltip
+                    d3.select("#tooltip").classed("hidden",true);      
+                });
+
+    
+        
+    
+        }
+
+        // When the button is changed, run the updateChart function
+        d3.select("#selectButton").on("change", function(event,d) {
+        // recover the option that has been chosen
+        const selectedOption = d3.select(this).property("value")
+        // console.log(selectedOption)
+        // run the updateChart function with this selected option
+        update(selectedOption)
+        })
+
+    
+
+    
+        
+    
+    })
+    </script>
+    
+    </html>
